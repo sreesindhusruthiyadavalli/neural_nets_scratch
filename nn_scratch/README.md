@@ -142,6 +142,15 @@ Testing and validation data:
 - Testing: To test neural net on unseen data
 - validation: to optimize hyper parameters of neural net. 
     - layer neurons,  activation functions, epochs, learning rate.
+- For large data: training, validation and test
+- For limited data - training and test.
+    - K-fold, 
+    - regularization , drop out.
+
+- L1 regularization : loss = data_loss + lambda * ||w||
+- L2 regularization : loss = data_loss + lambda * ||w|| * 2
+- drop out: randomly some neurons are switched off
+    
 
 
 

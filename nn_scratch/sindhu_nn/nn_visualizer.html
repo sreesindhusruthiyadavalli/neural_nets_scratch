@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<title>Working Deep Network Visualizer</title>
+<style>
+body{font-family:Arial;margin:20px;background:#fafafa}
+.panel{border:1px solid #ccc;padding:15px;border-radius:10px;background:white;margin-bottom:20px}
+textarea,input{width:100%;margin-top:5px;margin-bottom:10px;padding:8px;font-family:monospace}
+button{padding:10px;background:#2563eb;color:white;border:none;border-radius:8px;cursor:pointer}
+svg{width:100%;height:300px;border:1px solid #ddd;background:white}
+pre{background:#f3f4f6;padding:10px;border-radius:8px;overflow:auto}
+</style>
+</head>
+<body>
+
+<h1>Interactive Deep Network Visualizer</h1>
+
+<div class='panel'>
+
+<label>Architecture</label>
+<input id='arch' value='4,5,3'>
+
+<label>Batch Input X</label>
+<textarea id='xdata'>1,2,3,0
+2,1,0,1</textarea>
+
+<label>One-hot Labels Y</label>
+<textarea id='ydata'>1,0,0
+0,1,0</textarea>
+
+<button onclick='runNetwork()'>Run Network</button>
+
+</div>
+
+<div class='panel'>
+<h2>Network</h2>
+<svg id='network'></svg>
+</div>
+
+<div class='panel'>
+<h2>Forward Propagation</h2>
+<pre id='forward'></pre>
+</div>
+
+<div class='panel'>
+<h2>Backward Propagation</h2>
+<pre id='backward'></pre>
+</div>
+
+<script>
+
+function parseMatrix(text){
+    return text.trim().split("\n").map(
+        row => row.split(",").map(Number)
+    );
+}
+
+function zeros(r,c){
+    return Array.from({length:r},()=>Array(c).fill(0));
+}
+
+function randMatrix(r,c){
+    let m=[];
+    for(let i=0;i<r;i++){
+        let row=[];
+        for(let j=0;j<c;j++){
+            row.push(Number((Math.random()*0.5).toFixed(3)));
+        }
+        m.push(row);
+    }
+    return m;
+}
+
+function matmul(A,B){
+
+    let rows=A.length;
+    let cols=B[0].length;
+    let inner=B.length;
+
+    let C=zeros(rows,cols);
+
+    for(let i=0;i<rows;i++){
+        for(let j=0;j<cols;j++){
+            for(let k=0;k<inner;k++){
+                C[i][j]+=A[i][k]*B[k][j];
+            }
+        }
+    }
+
+    return C;
+}
+
+function addBias(A,b){
+    return A.map(row=>row.map((v,j)=>v+b[0][j]));
+}
+
+function relu(A){
+    return A.map(row=>row.map(v=>Math.max(0,v)));
+}
+
+function softmax(A){
+
+    return A.map(row=>{
+
+        let exps=row.map(v=>Math.exp(v));
+
+        let s=exps.reduce((a,b)=>a+b,0);
+
+        return exps.map(v=>v/s);
+
+    });
+
+}
+
+function subtract(A,B){
+    return A.map((row,i)=>row.map((v,j)=>v-B[i][j]));
+}
+
+function transpose(A){
+    return A[0].map((_,j)=>A.map(r=>r[j]));
+}
+
+function drawNetwork(arch){
+
+    const svg=document.getElementById("network");
+
+    svg.innerHTML="";
+
+    let width=800;
+    let height=300;
+
+    let gap=width/(arch.length+1);
+
+    for(let l=0;l<arch.length;l++){
+
+        let neurons=arch[l];
+
+        let x=(l+1)*gap;
+
+        for(let n=0;n<neurons;n++){
+
+            let y=50+n*(200/neurons);
+
+            let circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
+
+            circle.setAttribute("cx",x);
+            circle.setAttribute("cy",y);
+            circle.setAttribute("r",15);
+            circle.setAttribute("fill","white");
+            circle.setAttribute("stroke","blue");
+
+            svg.appendChild(circle);
+
+            if(l<arch.length-1){
+
+                let next=arch[l+1];
+                let nextX=(l+2)*gap;
+
+                for(let k=0;k<next;k++){
+
+                    let nextY=50+k*(200/next);
+
+                    let line=document.createElementNS("http://www.w3.org/2000/svg","line");
+
+                    line.setAttribute("x1",x+15);
+                    line.setAttribute("y1",y);
+                    line.setAttribute("x2",nextX-15);
+                    line.setAttribute("y2",nextY);
+                    line.setAttribute("stroke","#999");
+
+                    svg.appendChild(line);
+
+                }
+
+            }
+
+        }
+
+    }
+
+}
+
+function runNetwork(){
+
+    const arch=document.getElementById("arch").value.split(",").map(Number);
+
+    const X=parseMatrix(document.getElementById("xdata").value);
+
+    const Y=parseMatrix(document.getElementById("ydata").value);
+
+    drawNetwork(arch);
+
+    let A=X;
+
+    let forward="";
+
+    let weights=[];
+
+    for(let l=1;l<arch.length;l++){
+
+        let W=randMatrix(arch[l-1],arch[l]);
+
+        weights.push(W);
+
+        let b=[Array(arch[l]).fill(0.1)];
+
+        let Z=addBias(matmul(A,W),b);
+
+        forward+="Layer "+l+"\n";
+        forward+="W shape = ("+arch[l-1]+","+arch[l]+")\n";
+        forward+="Z = A_prev * W + b\n";
+        forward+=JSON.stringify(Z)+"\n\n";
+
+        if(l===arch.length-1){
+
+            A=softmax(Z);
+
+            forward+="Softmax Output:\n";
+
+        }else{
+
+            A=relu(Z);
+
+            forward+="ReLU Output:\n";
+
+        }
+
+        forward+=JSON.stringify(A)+"\n\n";
+
+    }
+
+    document.getElementById("forward").textContent=forward;
+
+    let backward="";
+
+    let dZ=subtract(A,Y);
+
+    backward+="Output Gradient dZ = Y_pred - Y_true\n";
+    backward+=JSON.stringify(dZ)+"\n\n";
+
+    for(let l=weights.length-1;l>=0;l--){
+
+        let dW=matmul(transpose(X),dZ);
+
+        backward+="Layer "+(l+1)+" gradients\n";
+        backward+="dW:\n";
+        backward+=JSON.stringify(dW)+"\n\n";
+
+    }
+
+    document.getElementById("backward").textContent=backward;
+
+}
+
+</script>
+
+</body>
+</html>
